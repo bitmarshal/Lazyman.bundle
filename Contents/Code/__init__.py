@@ -143,7 +143,7 @@ def getStreamVCO(date, game, feed):
 		streams = HTTP.Request(real_url).content.split("#")
 		objects = []
 
-		best_fps = 0.0
+		best_fps = 0
 		best_height = 0
 
 		for stream in streams:
@@ -161,22 +161,16 @@ def getStreamVCO(date, game, feed):
 					continue
 				else:
 					bw, width_s, height_s = stream_meta.groups()
-					fps = 30.0
+					fps = 30
 
 			else:
 				bw, width_s, height_s, fps = stream_meta.groups()
 
-			if int(height_s) < best_height or float(fps) < best_fps:
-				continue
-
-			best_height = int(height_s)
-			best_fps = float(fps)
-
 			res_url = real_url.rsplit('/', 1)[0] + "/" + url_end
-			best_object = MediaObject(
+			media_object = MediaObject(
 					protocol = 'hls',
 					video_codec = VideoCodec.H264,
-					video_frame_rate = fps,
+					video_frame_rate = str(fps),
 					audio_codec = AudioCodec.AAC,
 					video_resolution = height_s,
 					audio_channels = 2,
@@ -186,7 +180,13 @@ def getStreamVCO(date, game, feed):
 					]
 				)
 
-		objects.append(best_object)
+			if int(height_s) < best_height or float(fps) < best_fps:
+				objects.append(media_object)
+			else:
+				best_height = int(height_s)
+				best_fps = float(fps)
+				objects.insert(0, media_object)
+
 		STREAM_CACHE[game.game_id][feed.mediaId] = objects
 		return objects
 
