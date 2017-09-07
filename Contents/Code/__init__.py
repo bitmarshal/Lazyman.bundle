@@ -138,9 +138,13 @@ def getStreamVCO(date, game, feed):
 		except:
 			return []
 
+		fps_info_pattern = re.compile('EXT-X-STREAM-INF:BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),FRAME-RATE=(\d+\.\d+),CODECS=".+"')
 		info_pattern = re.compile('EXT-X-STREAM-INF:BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),CODECS=".+"')
 		streams = HTTP.Request(real_url).content.split("#")
 		objects = []
+
+		best_fps = 0
+		best_height = 0
 
 		for stream in streams:
 			try:
@@ -149,16 +153,24 @@ def getStreamVCO(date, game, feed):
 				Log(stream)
 				continue
 			info, url_end = stream.splitlines()
-			stream_meta = info_pattern.search(info)
+
+			stream_meta = fps_info_pattern.search(info)
 			if stream_meta == None:
-				continue
-			bw, width_s, height_s = stream_meta.groups()
+				stream_meta = info_pattern.search(info)
+				if stream_meta == None:
+					continue
+				else:
+					bw, width_s, height_s = stream_meta.groups()
+					fps_s = '30'
+
+			else:
+				bw, width_s, height_s, fps_s = stream_meta.groups()
+
 			res_url = real_url.rsplit('/', 1)[0] + "/" + url_end
-			objects.append(
-				MediaObject(
+			media_object = MediaObject(
 					protocol = 'hls',
 					video_codec = VideoCodec.H264,
-					video_frame_rate = 30,
+					video_frame_rate = fps_s,
 					audio_codec = AudioCodec.AAC,
 					video_resolution = height_s,
 					audio_channels = 2,
@@ -167,7 +179,13 @@ def getStreamVCO(date, game, feed):
 						PartObject(key = HTTPLiveStreamURL(Callback(PlayStream, url=res_url)))
 					]
 				)
-			)
+
+			if int(height_s) < best_height or float(fps_s) < best_fps:
+				objects.append(media_object)
+			else:
+				best_height = int(height_s)
+				best_fps = float(fps_s)
+				objects.insert(0, media_object)
 
 		STREAM_CACHE[game.game_id][feed.mediaId] = objects
 		return objects
