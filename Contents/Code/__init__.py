@@ -138,8 +138,10 @@ def getStreamVCO(date, game, feed):
 		except:
 			return []
 
-		fps_info_pattern = re.compile('EXT-X-STREAM-INF:BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),FRAME-RATE=(\d+\.\d+),CODECS=".+"')
-		info_pattern = re.compile('EXT-X-STREAM-INF:BANDWIDTH=(\d+),RESOLUTION=(\d+)x(\d+),CODECS=".+"')
+		resolution_pattern = re.compile('EXT-X-STREAM-INF:.*RESOLUTION=(\d+)x(\d+)')
+		fps_pattern = re.compile('EXT-X-STREAM-INF:.*FRAME-RATE=(\d+\.\d+),')
+		bw_pattern = re.compile('EXT-X-STREAM-INF:.*BANDWIDTH=(\d+)')
+
 		streams = HTTP.Request(real_url).content.split("#")
 		objects = []
 
@@ -154,25 +156,31 @@ def getStreamVCO(date, game, feed):
 				continue
 			info, url_end = stream.splitlines()
 
-			stream_meta = fps_info_pattern.search(info)
-			if stream_meta == None:
-				stream_meta = info_pattern.search(info)
-				if stream_meta == None:
-					continue
-				else:
-					bw, width_s, height_s = stream_meta.groups()
-					fps_s = '30'
-
+			stream_meta = resolution_pattern.search(info)
+			if stream_meta != None:
+				width = stream_meta.group(1)
+				height = stream_meta.group(2)
 			else:
-				bw, width_s, height_s, fps_s = stream_meta.groups()
+				continue
+
+			stream_meta = bw_pattern.search(info)
+			if stream_meta != None:
+				bw = stream_meta.group(1)
+			else:
+				continue
+
+			fps = 30
+			stream_meta = fps_pattern.search(info)
+			if stream_meta != None:
+				fps = stream_meta.group(1)
 
 			res_url = real_url.rsplit('/', 1)[0] + "/" + url_end
 			media_object = MediaObject(
 					protocol = 'hls',
 					video_codec = VideoCodec.H264,
-					video_frame_rate = fps_s,
+					video_frame_rate = str(fps),
 					audio_codec = AudioCodec.AAC,
-					video_resolution = height_s,
+					video_resolution = str(height),
 					audio_channels = 2,
 					optimized_for_streaming = True,
 					parts = [
@@ -180,11 +188,11 @@ def getStreamVCO(date, game, feed):
 					]
 				)
 
-			if int(height_s) < best_height or float(fps_s) < best_fps:
+			if height < best_height or fps < best_fps:
 				objects.append(media_object)
 			else:
-				best_height = int(height_s)
-				best_fps = float(fps_s)
+				best_height = height
+				best_fps = fps
 				objects.insert(0, media_object)
 
 		STREAM_CACHE[game.game_id][feed.mediaId] = objects
